@@ -1,0 +1,441 @@
+/* =========================================
+   1. GLOBAL LAYOUT
+   ========================================= */
+body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; font-family: sans-serif; overflow: hidden;}
+
+#header { padding: 15px 20px; background-color: #f8f9fa; border-bottom: 1px solid #ddd; display: flex; align-items: center; justify-content: space-between; }
+#slider-container { display: flex; align-items: center; gap: 15px; }
+#yearSlider { width: 300px; cursor: pointer; }
+#yearDisplay { font-weight: bold; font-size: 1.2em; min-width: 50px;}
+
+#map-container { position: relative; flex-grow: 1; }
+#map { width: 100%; height: 100%; }
+
+/* =========================================
+   2. RIGHT SIDEBAR (PROPERTY EXPLORER)
+   ========================================= */
+#sidebar {
+    position: absolute; top: 0; right: 0; width: 380px; height: 100%;
+    background: rgba(255, 255, 255, 0.95); z-index: 1000;
+    padding: 20px; box-sizing: border-box; box-shadow: -2px 0 5px rgba(0,0,0,0.3);
+    display: flex; flex-direction: column;
+}
+#sidebar-content { flex-grow: 1; overflow-y: auto; padding-right: 5px; scroll-behavior: smooth; }
+
+.tabs { display: flex; border-bottom: 2px solid #eee; margin-bottom: 15px; }
+.tab-btn { flex: 1; padding: 10px; background: none; border: none; font-weight: bold; cursor: pointer; color: #666; border-bottom: 2px solid transparent; margin-bottom: -2px; }
+.tab-btn.active { color: #0076ff; border-bottom: 2px solid #0076ff; }
+.tab-btn:hover:not(.active) { color: #333; }
+
+/* Ownership Timeline Styles */
+.history-item { padding: 12px 0; border-bottom: 1px solid #eee; font-size: 14px; }
+.history-item.active { background-color: #fff3cd; padding: 12px; border-radius: 4px; border: 1px solid #ffe69c; }
+
+.timeline-inferred { font-weight: bold; display: block; margin-bottom: 4px; font-size: 15px; }
+.timeline-confirmed { display: inline-block; font-size: 12px; color: #444; margin-bottom: 12px; background: #eef2f5; padding: 4px 8px; border-radius: 4px; border: 1px solid #d1d9e0; }
+.date-arrow { color: #a0aec0; margin: 0 4px; font-size: 10px; }
+.date-unknown { color: #a0aec0; font-style: italic; }
+
+.owner-entry { margin-bottom: 4px; }
+
+/* Document Timeline Styles */
+.timeline { border-left: 3px solid #0076ff; margin-left: 10px; padding-left: 20px; margin-top: 10px; }
+.timeline-node { position: relative; margin-bottom: 25px; cursor: pointer; padding: 10px; border-radius: 6px; transition: background 0.2s; }
+.timeline-node:hover { background: #f0f8ff; }
+.timeline-node::before { 
+    content: ''; position: absolute; left: -28px; top: 15px; width: 11px; height: 11px; 
+    background: #fff; border: 3px solid #0076ff; border-radius: 50%; 
+}
+.node-year { font-weight: bold; font-size: 16px; color: #0076ff; }
+.node-text { font-size: 13px; color: #444; margin-top: 4px; line-height: 1.4; }
+
+/* =========================================
+   3. FLOATING ACTOR PROFILE
+   ========================================= */
+#person-profile {
+    display: none; position: absolute; top: 20px; left: 20px; width: 320px;
+    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px);
+    z-index: 1000; border-radius: 8px; box-shadow: 2px 4px 15px rgba(0,0,0,0.3);
+    border: 1px solid #ddd; overflow: hidden; font-size: 14px;
+}
+#profile-header {
+    background: #2c3e50; color: white; padding: 12px 15px; font-weight: bold;
+    display: flex; justify-content: space-between; align-items: center;
+}
+#profile-close { cursor: pointer; font-size: 18px; color: #bbb; }
+#profile-close:hover { color: white; }
+#profile-content { padding: 15px; max-height: 60vh; overflow-y: auto; }
+.profile-section { margin-bottom: 12px; font-size: 13px;}
+.profile-label { font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 2px;}
+
+/* =========================================
+   4. MODAL & IMAGE VIEWER
+   ========================================= */
+#modal-overlay {
+    display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.7); z-index: 2000; justify-content: center; align-items: center;
+}
+#modal-box {
+    background: white; border-radius: 8px; width: 800px; max-width: 95%; height: 90vh;
+    display: flex; flex-direction: column; overflow: hidden; position: relative; box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+}
+#modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: flex-start;}
+.close-btn { cursor: pointer; font-size: 28px; font-weight: bold; border: none; background: none; color: #999; line-height: 1; }
+.close-btn:hover { color: #333; }
+
+#image-viewer-area { 
+    flex-grow: 1; background: #222; position: relative; overflow: hidden; 
+    display: flex; align-items: center; justify-content: center; 
+    cursor: grab; user-select: none; 
+}
+#image-viewer-area:active { cursor: grabbing; }
+#viewer-img { max-width: 100%; max-height: 100%; pointer-events: none; } 
+
+.nav-btn {
+    position: absolute; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.5); color: white;
+    border: none; padding: 15px 20px; font-size: 20px; cursor: pointer; border-radius: 4px; z-index: 10;
+}
+.nav-btn:hover { background: rgba(0,0,0,0.8); }
+#prev-btn { left: 10px; }
+#next-btn { right: 10px; }
+#img-counter { position: absolute; bottom: 10px; right: 10px; background: rgba(0,0,0,0.6); color: white; padding: 5px 10px; border-radius: 4px; font-size: 12px; z-index: 10;}
+#zoom-hint { position: absolute; top: 10px; left: 10px; color: rgba(255,255,255,0.7); font-size: 12px; pointer-events: none; z-index: 10;}
+
+/* =========================================
+   5. BOTTOM PANEL (GANTT CHART TIMELINE)
+   ========================================= */
+#bottom-panel {
+    position: absolute; 
+    bottom: -100%; /* Hidden by default, relies on dynamic height to slide away */
+    left: 0; 
+    width: calc(100% - 380px); /* Leave room for sidebar */
+    max-height: 60vh; /* Limits maximum height so map remains visible */
+    background: #fff; 
+    z-index: 1000; 
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.15);
+    transition: bottom 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
+    display: flex; 
+    flex-direction: column;
+}
+
+#bottom-panel.open {
+    bottom: 0; /* Slide up into view */
+}
+
+#panel-header {
+    background: #f1f3f5; padding: 10px 20px; border-bottom: 1px solid #ddd;
+    display: flex; justify-content: space-between; align-items: center; font-weight: bold;
+}
+
+#panel-close { cursor: pointer; font-size: 20px; color: #888; }
+#panel-close:hover { color: #d9534f; }
+
+#timeline-container {
+    flex-grow: 1; overflow-x: auto; overflow-y: auto; 
+    position: relative; background: #fafafa; padding-bottom: 20px;
+}
+
+/* Timeline Components */
+.timeline-wrapper { position: relative; min-width: 100%; /* Will be dynamically widened */ }
+.timeline-svg-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 5; }
+
+.gantt-lane { position: relative; height: 35px; border-bottom: 1px dashed #e0e0e0; }
+.gantt-bar { 
+    position: absolute; height: 25px; top: 5px; border-radius: 4px; 
+    color: white; font-size: 11px; padding: 4px 6px; box-sizing: border-box; 
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; 
+    cursor: pointer; z-index: 10; box-shadow: 1px 1px 3px rgba(0,0,0,0.2);
+    border: 1px solid rgba(0,0,0,0.1);
+}
+.gantt-bar:hover { filter: brightness(1.1); }
+
+.doc-track { 
+    position: relative; height: 40px; background: #ebf0f5; 
+    border-top: 2px solid #ccc; border-bottom: 1px solid #ccc; 
+    margin-top: 10px;
+}
+.doc-dot { 
+    position: absolute; bottom: 10px; width: 14px; height: 14px; 
+    background: #d9534f; border: 2px solid #fff; border-radius: 50%; 
+    cursor: pointer; transform: translateX(-50%); z-index: 20;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.doc-dot:hover { transform: translateX(-50%) scale(1.3); background: #c9302c; }
+
+/* Background Year Ticks */
+.year-tick { position: absolute; top: 0; bottom: 0; border-left: 1px solid #eaeaea; pointer-events: none; }
+.year-label { position: absolute; top: 5px; font-size: 10px; color: #aaa; transform: translateX(-50%); }
+
+/* =========================================
+   6. SEARCH BAR & AUTOCOMPLETE
+   ========================================= */
+#propertySearch {
+    padding: 6px 12px;
+    width: 100%;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+}
+
+.autocomplete-items {
+    position: absolute;
+    border: 1px solid #d4d4d4;
+    border-top: none;
+    z-index: 9999;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background-color: #fff;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border-radius: 0 0 4px 4px;
+}
+
+.autocomplete-items div {
+    padding: 10px;
+    cursor: pointer;
+    background-color: #fff;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.autocomplete-items div:hover {
+    background-color: #f1f3f5;
+}
+
+.search-id { 
+    color: #888; 
+    font-size: 11px; 
+    display: block; 
+}
+
+/* =========================================
+   7. RELATED PROPERTIES TAGS
+   ========================================= */
+.related-tag {
+    cursor: pointer; display: inline-block; padding: 4px 8px; 
+    border-radius: 4px; font-size: 11px; font-weight: bold;
+    border: 1px solid rgba(0,0,0,0.1); transition: filter 0.2s;
+    white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+.related-tag:hover { filter: brightness(0.9); }
+.pred-tag { background: #fff3cd; color: #856404; border-color: #ffeeba; }
+.succ-tag { background: #d1ecf1; color: #0c5460; border-color: #bee5eb; }
+.part-of-tag { background: #e2e3e5; color: #383d41; border-color: #d6d8db; }
+.contains-tag { background: #d4edda; color: #155724; border-color: #c3e6cb; }
+
+.timeline-rel-tag { z-index: 60; }
+
+/* =========================================
+   8. NEIGHBOR DOCUMENT DIAMONDS
+   ========================================= */
+.doc-diamond {
+    position: absolute; 
+    bottom: 10px; 
+    width: 10px; 
+    height: 10px; 
+    background: #0076ff; /* Blue */
+    border: 1px solid #fff; 
+    cursor: pointer; 
+    transform: translateX(-50%) rotate(45deg); /* Centers and tilts it */
+    z-index: 20;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+.doc-diamond:hover { 
+    transform: translateX(-50%) rotate(45deg) scale(1.3); 
+    background: #0056b3; 
+}
+
+/* =========================================
+   9. GENERAL DOCUMENT DOTS
+   ========================================= */
+.doc-grey-dot { 
+    position: absolute; 
+    bottom: 10px; 
+    width: 10px; 
+    height: 10px; 
+    background: #a0aec0; 
+    border: 1px solid #fff; 
+    border-radius: 50%; 
+    cursor: pointer; 
+    transform: translateX(-50%); 
+    z-index: 15;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+}
+.doc-grey-dot:hover { 
+    transform: translateX(-50%) scale(1.3); 
+    background: #718096; 
+}
+
+/* =========================================
+   11. PERSON PROFILE FLOATING CARD
+   ========================================= */
+#person-profile {
+    position: absolute;
+    top: 20px !important;
+    left: auto !important; 
+    /* The 'right' property is now dynamically handled by JS! */
+    width: 280px;
+    background: #ffffff;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+    border: 1px solid #ddd;
+    padding: 20px;
+    z-index: 1000;
+    font-family: inherit;
+    color: #333;
+    display: none;
+}
+
+/* =========================================
+   12. INTRODUCTION MODAL
+   ========================================= */
+#intro-toggle-btn {
+    background: #0076ff;
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+#intro-toggle-btn:hover { 
+    background: #0056b3; 
+}
+
+#intro-modal-overlay {
+    display: none; /* Controlled by the button */
+    position: fixed; 
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6); 
+    z-index: 3000; 
+    justify-content: center; align-items: center;
+}
+
+#intro-modal-box {
+    background: white; 
+    border-radius: 8px; 
+    width: 800px; 
+    max-width: 90%; 
+    max-height: 85vh;
+    display: flex; 
+    flex-direction: column; 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+#intro-modal-header {
+    padding: 20px 30px; 
+    border-bottom: 1px solid #eee; 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    background: #f8f9fa; 
+    border-radius: 8px 8px 0 0;
+}
+
+.intro-close-btn {
+    cursor: pointer; 
+    font-size: 28px; 
+    font-weight: bold; 
+    border: none; 
+    background: none; 
+    color: #999; 
+    line-height: 1; 
+    padding: 0; margin: 0;
+}
+
+.intro-close-btn:hover { 
+    color: #d9534f; 
+}
+
+#intro-modal-content {
+    padding: 30px; 
+    overflow-y: auto; 
+    font-size: 15px; 
+    line-height: 1.6; 
+    color: #333;
+}
+
+.intro-section-title {
+    color: #2c3e50; 
+    font-size: 18px; 
+    margin-top: 25px; 
+    margin-bottom: 15px;
+    border-bottom: 2px solid #eee; 
+    padding-bottom: 5px;
+}
+
+#intro-modal-content h3 {
+    color: #444; 
+    font-size: 16px; 
+    margin-top: 20px; 
+    margin-bottom: 8px;
+}
+
+#intro-modal-content p {
+    margin-top: 0; 
+    margin-bottom: 15px;
+}
+
+#intro-modal-content a {
+    color: #0076ff; 
+    text-decoration: none;
+}
+
+#intro-modal-content a:hover {
+    text-decoration: underline;
+}
+
+/* =========================================
+   13. WELCOME PROMPT
+   ========================================= */
+#welcome-prompt-overlay {
+    display: none; /* Controlled by JS */
+    position: fixed; 
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.6); 
+    z-index: 4000; /* Stays above absolutely everything */
+    justify-content: center; align-items: center;
+}
+
+#welcome-prompt-box {
+    background: white; 
+    border-radius: 8px; 
+    width: 400px; 
+    max-width: 90%; 
+    padding: 30px;
+    text-align: center;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+.prompt-btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.yes-btn {
+    background: #0076ff;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.yes-btn:hover { background: #0056b3; }
+
+.no-btn {
+    background: #e2e3e5;
+    color: #383d41;
+}
+
+.no-btn:hover { background: #d6d8db; }

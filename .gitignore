@@ -1,0 +1,16 @@
+/*
+
+!.gitignore
+
+!/*.html
+
+!/institutions_data.json
+!/Stadtmauern_web.geojson
+
+!/css/
+!/js/
+
+!/prepare_data/geometries.geojson
+!/prepare_data/actors.json
+!/prepare_data/documents.json
+!/prepare_data/zuenfte.tsv
