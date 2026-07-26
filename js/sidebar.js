@@ -39,7 +39,7 @@ export function closeBottomPanel() {
 export function selectOwnerInSidebar(personId) {
     state.selectedPerson = personId;
     renderSidebarContent();
-    renderBottomTimeline();
+    renderBottomTimeline(true);
 }
 
 function renderSidebarContent() {
@@ -169,9 +169,12 @@ function renderSidebarContent() {
     contentDiv.innerHTML = html;
 }
 
-function renderBottomTimeline() {
+function renderBottomTimeline(keepScroll = false) {
     const container = document.getElementById('timeline-container');
     const property = state.currentProperty;
+
+    // Memorize the current scroll position before we wipe the HTML
+    const previousScroll = keepScroll ? container.scrollLeft : 0;
     
     if (!property.owners) {
         container.innerHTML = "<p style='padding:20px; color:#888;'>No ownership timeline data available.</p>";
@@ -474,6 +477,10 @@ function renderBottomTimeline() {
     html += `<svg class="timeline-svg-overlay"></svg></div>`;
     container.innerHTML = html;
 
-    const targetScroll = (state.currentSelectedYear - START_YEAR) * PIXELS_PER_YEAR;
-    container.scrollLeft = targetScroll - (container.clientWidth / 2);
+    if (keepScroll) {
+        container.scrollLeft = previousScroll;
+    } else {
+        const targetScroll = (state.currentSelectedYear - START_YEAR) * PIXELS_PER_YEAR;
+        container.scrollLeft = targetScroll - (container.clientWidth / 2);
+    }
 }
