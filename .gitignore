@@ -10,6 +10,10 @@
 !/css/
 !/js/
 
+!/prepare_data/
+
+/prepare_data/*
+
 !/prepare_data/geometries.geojson
 !/prepare_data/actors.json
 !/prepare_data/documents.json
