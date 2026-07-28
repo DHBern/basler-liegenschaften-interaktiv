@@ -20,8 +20,8 @@ map1862.addTo(map);
 
 L.control.layers(
     {
-        "1862 Situationsplan": map1862,
-        "1615 Merianplan": map1615
+        "Übersichtsplan 1862": map1862,
+        "Übersichtsplan 1615": map1615
     }, 
     null,
     { position: 'topleft' }
