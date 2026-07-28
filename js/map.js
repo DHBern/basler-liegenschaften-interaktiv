@@ -4,10 +4,28 @@ import { renderSidebar } from './sidebar.js';
 
 export const map = L.map('map', { center: [47.5596, 7.5886], zoom: 15, preferCanvas: true });
 
-L.tileLayer.wms('https://wms.geo.bs.ch/', {
+// 1. Define the 1862 layer
+const map1862 = L.tileLayer.wms('https://wms.geo.bs.ch/', {
     layers: 'HP_Situationsplan_Basel_1862', format: 'image/png', transparent: true,
     attribution: 'Geodaten Kanton Basel-Stadt', updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 8 
-}).addTo(map);
+});
+
+// 2. Define the 1615 layer
+const map1615 = L.tileLayer.wms('https://wms.geo.bs.ch/', {
+    layers: 'HP_Uebersichtsplan_Basel_1615', format: 'image/png', transparent: true,
+    attribution: 'Geodaten Kanton Basel-Stadt', updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 8 
+});
+
+map1862.addTo(map);
+
+L.control.layers(
+    {
+        "1862 Situationsplan": map1862,
+        "1615 Merianplan": map1615
+    }, 
+    null,
+    { position: 'topleft' }
+).addTo(map);
 
 // 1. Create a custom background pane. Standard overlays are z-index 400. 
 // Putting this at 350 guarantees it sits above the map tiles but permanently BELOW your properties.

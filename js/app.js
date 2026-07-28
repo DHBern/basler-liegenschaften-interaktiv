@@ -80,24 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
             autocompleteList.innerHTML = '';
         }
     });
-
-    if (SHOW_WELCOME_PROMPT && !localStorage.getItem('hasSeenIntroPrompt')) {
-        const promptOverlay = document.getElementById('welcome-prompt-overlay');
-        promptOverlay.style.display = 'flex';
-
-        // If they click Yes
-        document.getElementById('btn-yes-intro').onclick = () => {
-            promptOverlay.style.display = 'none';
-            localStorage.setItem('hasSeenIntroPrompt', 'true'); // Remember for next time
-            document.getElementById('intro-modal-overlay').style.display = 'flex'; // Open main intro
-        };
-
-        // If they click No
-        document.getElementById('btn-no-intro').onclick = () => {
-            promptOverlay.style.display = 'none';
-            localStorage.setItem('hasSeenIntroPrompt', 'true'); // Remember for next time
-        };
-    }
 });
 
 // 3. Fetch Data & Bootstrap the Application
@@ -197,3 +179,30 @@ fetch('institutions_data.json').then(res => res.json()).then(data => {
 fetch('Stadtmauern_web.geojson').then(res => res.json()).then(data => {
     cityWallLayer.addData(data);
 }).catch(err => console.warn("City walls data not found."));
+
+fetch('intro.html')
+    .then(response => response.text())
+    .then(html => {
+        document.body.insertAdjacentHTML('beforeend', html);
+        
+        // Welcome Prompt Logic
+        if (SHOW_WELCOME_PROMPT && !localStorage.getItem('hasSeenIntroPrompt')) {
+            const promptOverlay = document.getElementById('welcome-prompt-overlay');
+            if (promptOverlay) {
+                promptOverlay.style.display = 'flex';
+
+                document.getElementById('btn-yes-intro').onclick = () => {
+                    promptOverlay.style.display = 'none';
+                    localStorage.setItem('hasSeenIntroPrompt', 'true'); 
+                    const introModal = document.getElementById('intro-modal-overlay');
+                    if (introModal) introModal.style.display = 'flex'; 
+                };
+
+                document.getElementById('btn-no-intro').onclick = () => {
+                    promptOverlay.style.display = 'none';
+                    localStorage.setItem('hasSeenIntroPrompt', 'true'); 
+                };
+            }
+        }
+    })
+    .catch(err => console.error("Failed to load intro.html", err));
