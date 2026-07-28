@@ -67,6 +67,10 @@ export function showPersonProfile(personId) {
         html += `</ul></div>`;
     }
 
+    html += `<div style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #ccc; font-size: 11px; color: #888; font-style: italic; line-height: 1.3;">
+                Please note person information has only been identified on property and neighbor-level.
+             </div>`;
+
     html += `</div>`;
     
     // Close button
