@@ -2,7 +2,8 @@
 import { state } from './state.js';
 import { renderSidebar } from './sidebar.js';
 
-export const map = L.map('map', { center: [47.5596, 7.5886], zoom: 15, preferCanvas: true });
+export const map = L.map('map', { center: [47.5596, 7.5886], zoom: 15, preferCanvas: true, attributionControl: false });
+L.control.attribution({ position: 'bottomleft' }).addTo(map);
 
 // 1. Define the 1862 layer
 const map1862 = L.tileLayer.wms('https://wms.geo.bs.ch/', {
