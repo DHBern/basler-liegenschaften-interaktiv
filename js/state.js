@@ -8,9 +8,10 @@ export const state = {
     currentProperty: null,
     currentSelectedYear: 1450,
     currentView: 'owners',
+    activeFilter: null,
     
     // NEW properties for mapping
-    colorMode: 'concept', // 'concept', 'zunft', 'gewerbe'
+    colorMode: 'group', // 'concept', 'zunft', 'gewerbe'
     occupationLookup: {}, // Maps raw occupation string -> { concept, zunft, gewerbe }
     palettes: {
         concept: {},

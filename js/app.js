@@ -1,6 +1,6 @@
 // js/app.js
 import { state } from './state.js';
-import { map, propertyLayer, institutionLayer, cityWallLayer, updateMap, drawInstitutions, updateLegend, focusProperty } from './map.js';
+import { map, propertyLayer, institutionLayer, cityWallLayer, updateMap, drawInstitutions, updateLegend, focusProperty, highlightLegendCategory, resetLegendHighlight, toggleLegendFilter } from './map.js';
 import { renderSidebar, closeBottomPanel, selectOwnerInSidebar, renderBottomTimeline } from './sidebar.js';
 import { showPersonProfile, closeProfile } from './profile.js';
 import { openModal, closeModal, changeImage, setupModalInteractions } from './modal.js';
@@ -15,6 +15,9 @@ window.changeImage = changeImage;
 window.closeBottomPanel = closeBottomPanel;
 window.selectOwnerInSidebar = selectOwnerInSidebar;
 window.focusProperty = focusProperty;
+window.highlightLegendCategory = highlightLegendCategory;
+window.resetLegendHighlight = resetLegendHighlight;
+window.toggleLegendFilter = toggleLegendFilter;
 window.toggleTimelineSection = function(contentId, iconId) {
     const content = document.getElementById(contentId);
     const icon = document.getElementById(iconId);
@@ -60,6 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('mapColorMode').addEventListener('change', (e) => {
         state.colorMode = e.target.value;
+        state.activeFilter = null;
         updateMap();
         updateLegend(); 
     });
@@ -107,8 +111,9 @@ Promise.all([
     fetch('prepare_data/documents.json').then(res => res.json()),
     fetch('prepare_data/zuenfte.tsv').then(res => res.text()),
     fetch('datasets/price_history.json').then(res => res.json()),
-    fetch('datasets/price_colorscale_stats.json').then(res => res.json())
-]).then(([geoJsonData, fetchedPersons, fetchedDocs, tsvData, fetchedPrices, fetchedPriceScales]) => {
+    fetch('datasets/price_colorscale_stats.json').then(res => res.json()),
+    fetch('datasets/occ_groups.json').then(res => res.json())
+]).then(([geoJsonData, fetchedPersons, fetchedDocs, tsvData, fetchedPrices, fetchedPriceScales, fetchedGroupings]) => {
 
     // Sort geometries by area
     geoJsonData.features.sort((a, b) => (b.properties.area || 0) - (a.properties.area || 0));
@@ -157,11 +162,10 @@ Promise.all([
         const cols = lines[i].split('\t');
         if (cols.length <= Math.max(normIdx, zunftIdx, gewIdx)) continue;
         
-        // Split normvarianten by semicolon, trim whitespace, and lowercase
         const variants = cols[normIdx].split(';').map(v => v.trim().toLowerCase()).filter(v => v);
         if (variants.length === 0) continue;
         
-        const concept = variants[0]; // First variant acts as the primary concept name
+        const concept = variants[0]; 
         const zunft = cols[zunftIdx] ? cols[zunftIdx].trim() : '';
         const gewerbe = cols[gewIdx] ? cols[gewIdx].trim() : '';
         
@@ -169,11 +173,24 @@ Promise.all([
         if (gewerbe) uniqueGewerbe.add(gewerbe);
 
         variants.forEach(v => {
-            state.occupationLookup[v] = { concept, zunft, gewerbe };
+            // Include a placeholder for 'group'
+            state.occupationLookup[v] = { concept, zunft, gewerbe, group: null }; 
         });
     }
 
-    // --- NEW: Calculate Top 20 Concepts based on actual person data ---
+    // --- Apply Custom Occupation Groupings ---
+    for (const [groupName, variants] of Object.entries(fetchedGroupings)) {
+        variants.forEach(v => {
+            const lowerV = v.toLowerCase();
+            if (!state.occupationLookup[lowerV]) {
+                state.occupationLookup[lowerV] = { concept: lowerV, zunft: '', gewerbe: '', group: groupName };
+            } else {
+                state.occupationLookup[lowerV].group = groupName;
+            }
+        });
+    }
+
+    // --- CALCULATE TOP 20 CONCEPTS ---
     const conceptCounts = {};
     Object.values(fetchedPersons).forEach(actor => {
         if (actor.occ && actor.occ.length > 0) {
@@ -186,11 +203,11 @@ Promise.all([
     });
 
     const top20Concepts = Object.entries(conceptCounts)
-        .sort((a, b) => b[1] - a[1]) // Sort descending by frequency
+        .sort((a, b) => b[1] - a[1])
         .slice(0, 20)
         .map(entry => entry[0]);
 
-    // --- NEW: Generate color palettes dynamically (using HSL distribution) ---
+    // --- GENERATE PALETTES ---
     function generatePalette(keys) {
         const palette = {};
         const step = 360 / Math.max(keys.length, 1);
@@ -200,9 +217,37 @@ Promise.all([
         return palette;
     }
 
-    state.palettes.concept = generatePalette(top20Concepts); // Only the top 20 get colors
+    // Generate both palettes
+    state.palettes.group = generatePalette(Object.keys(fetchedGroupings)); 
+    state.palettes.concept = generatePalette(top20Concepts); 
     state.palettes.zunft = generatePalette(Array.from(uniqueZuenfte));
     state.palettes.gewerbe = generatePalette(Array.from(uniqueGewerbe));
+
+    // --- TEMPORARY: FIND UNASSIGNED OCCUPATIONS ---
+    const unassignedCounts = {};
+    
+    Object.values(fetchedPersons).forEach(actor => {
+        if (actor.occ && actor.occ.length > 0) {
+            actor.occ.forEach(rawOcc => {
+                const occ = rawOcc.toLowerCase();
+                const mapping = state.occupationLookup[occ];
+                
+                // Check if it lacks a group mapping
+                if (!mapping || !mapping.group) {
+                    unassignedCounts[occ] = (unassignedCounts[occ] || 0) + 1;
+                }
+            });
+        }
+    });
+
+    const topUnassigned = Object.entries(unassignedCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 50)
+        .map(([occupation, count]) => ({ Occupation: occupation, Count: count }));
+
+    console.log("--- MOST COMMON UNASSIGNED OCCUPATIONS ---");
+    console.table(topUnassigned);
+    // ----------------------------------------------
     
     // Inject Geographic Data & Render
     propertyLayer.addData(geoJsonData);

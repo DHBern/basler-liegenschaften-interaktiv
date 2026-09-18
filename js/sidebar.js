@@ -1,5 +1,6 @@
 // js/sidebar.js
 import { state } from './state.js';
+import { getMarkerColor } from './map.js';
 
 let lastPropertyId = null;
 
@@ -471,10 +472,7 @@ export function renderBottomTimeline(keepScroll = false) {
             if (actor) {
                 if (actor.occ && actor.occ.length > 0) {
                     occStr = actor.occ.join(', ');
-                    const mapping = state.occupationLookup[actor.occ[0].toLowerCase()];
-                    if (mapping && state.palettes.concept[mapping.concept]) {
-                        color = state.palettes.concept[mapping.concept];
-                    }
+                    color = getMarkerColor(ownerBlock.id);
                 }
                 
                 if (actor.rel) {

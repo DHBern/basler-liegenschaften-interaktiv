@@ -162,24 +162,34 @@ function getClosestPriceRecord(property, targetYear, window = 12) {
     return bestRecord;
 }
 
-function getMarkerColor(ownerIds) {
+export function getMarkerColor(ownerIds) {
     if (!ownerIds) return state.COLOR_OTHER;
     const ids = Array.isArray(ownerIds) ? ownerIds : [ownerIds];
     
     for (let id of ids) {
         const actor = state.personsData[id];
         if (actor && actor.occ && actor.occ.length > 0) {
-            const occ = actor.occ[0].toLowerCase();
-            const mapping = state.occupationLookup[occ];
-            
-            if (mapping) {
-                if (state.colorMode === 'concept') {
-                    // Returns color if in top 20, otherwise falls back to grey ("other")
-                    return state.palettes.concept[mapping.concept] || state.COLOR_OTHER;
-                } else if (state.colorMode === 'zunft') {
-                    return mapping.zunft ? (state.palettes.zunft[mapping.zunft] || state.COLOR_OTHER) : state.COLOR_OTHER;
-                } else if (state.colorMode === 'gewerbe') {
-                    return mapping.gewerbe ? (state.palettes.gewerbe[mapping.gewerbe] || state.COLOR_OTHER) : state.COLOR_OTHER;
+            for (let i = 0; i < actor.occ.length; i++) {
+                const occ = actor.occ[i].toLowerCase();
+                const mapping = state.occupationLookup[occ];
+                
+                if (mapping) {
+                    let matchedColor = null;
+                    
+                    if (state.colorMode === 'group') {
+                        matchedColor = mapping.group ? state.palettes.group[mapping.group] : null;
+                    } else if (state.colorMode === 'concept') {
+                        matchedColor = state.palettes.concept[mapping.concept];
+                    } else if (state.colorMode === 'zunft') {
+                        matchedColor = mapping.zunft ? state.palettes.zunft[mapping.zunft] : null;
+                    } else if (state.colorMode === 'gewerbe') {
+                        matchedColor = mapping.gewerbe ? state.palettes.gewerbe[mapping.gewerbe] : null;
+                    }
+                    
+                    // If a valid color is found for this mode, return it immediately
+                    if (matchedColor) {
+                        return matchedColor;
+                    }
                 }
             }
         }
@@ -273,6 +283,10 @@ export function updateMap(restack = true) {
             if (layer.bringToFront) layer.bringToFront();
         });
     }
+
+    if (state.activeFilter) {
+        highlightLegendCategory(state.activeFilter);
+    }
 }
 
 export function drawInstitutions() {
@@ -344,7 +358,8 @@ legendControl.onAdd = function() {
 
     div.innerHTML = `
         <select id="mapColorMode" style="width: 100%; margin-bottom: 10px; padding: 5px; cursor: pointer;">
-            <option value="concept">Occupation Concept (Top 20)</option>
+            <option value="group">Occupation</option>
+            <option value="concept">Most Frequent Occupations</option>
             <option value="zunft">Zunft (Guild)</option>
             <option value="gewerbe">Gewerbe (Trade)</option>
             <option value="price">Property Value</option>
@@ -384,14 +399,33 @@ export function updateLegend() {
     const activePalette = state.palettes[state.colorMode];
 
     for (const [key, color] of Object.entries(activePalette)) {
-        html += `<div style="display: flex; align-items: center; margin-bottom: 4px;">
+        const safeKey = key.replace(/'/g, "\\'"); 
+        
+        // Check if this row is the currently locked filter
+        const isActive = state.activeFilter === key;
+        const bgStyle = isActive ? '#e2e8f0' : 'transparent';
+        const fontWeight = isActive ? 'bold' : 'normal';
+        const borderStyle = isActive ? 'border-left: 3px solid #0076ff;' : 'border-left: 3px solid transparent;';
+        
+        html += `<div style="display: flex; align-items: center; margin-bottom: 4px; padding: 2px 4px 2px 8px; cursor: pointer; transition: background 0.2s; background: ${bgStyle}; font-weight: ${fontWeight}; ${borderStyle}"
+                      onclick="window.toggleLegendFilter('${safeKey}')"
+                      onmouseenter="if(!state.activeFilter) window.highlightLegendCategory('${safeKey}')"
+                      onmouseleave="if(!state.activeFilter) window.resetLegendHighlight()">
                     <span style="background-color: ${color}; width: 14px; height: 14px; display: inline-block; margin-right: 8px; border: 1px solid #777;"></span>
                     <span style="font-size: 12px; font-family: sans-serif;">${key}</span>
                  </div>`;
     }
     
-    // Always append the "Other / Unassigned" category at the bottom
-    html += `<div style="display: flex; align-items: center; margin-top: 8px;">
+    // Do the same for the "Other" category
+    const isOtherActive = state.activeFilter === 'other';
+    const otherBg = isOtherActive ? '#e2e8f0' : 'transparent';
+    const otherWeight = isOtherActive ? 'bold' : 'normal';
+    const otherBorder = isOtherActive ? 'border-left: 3px solid #0076ff;' : 'border-left: 3px solid transparent;';
+
+    html += `<div style="display: flex; align-items: center; margin-top: 8px; padding: 2px 4px 2px 8px; cursor: pointer; transition: background 0.2s; background: ${otherBg}; font-weight: ${otherWeight}; ${otherBorder}"
+                  onclick="window.toggleLegendFilter('other')"
+                  onmouseenter="if(!state.activeFilter) window.highlightLegendCategory('other')"
+                  onmouseleave="if(!state.activeFilter) window.resetLegendHighlight()">
                 <span style="background-color: ${state.COLOR_OTHER}; width: 14px; height: 14px; display: inline-block; margin-right: 8px; border: 1px solid #777;"></span>
                 <span style="font-size: 12px; font-family: sans-serif; color: #666; font-style: italic;">Other / Unassigned</span>
              </div>`;
@@ -429,4 +463,75 @@ export function focusProperty(propertyId, autoYear = null) {
         renderSidebar();
         updateMap(restack); 
     }
+}
+
+export function highlightLegendCategory(categoryKey) {
+    if (!categoryKey) return;
+    
+    propertyLayer.eachLayer(layer => {
+        // Skip properties that are already invisible (not active in this year)
+        if (layer.options.fillOpacity === 0) return; 
+
+        let matches = false;
+        
+        // Fast-path for the "Other" category based on the default grey color
+        if (categoryKey === 'other') {
+            if (layer.options.fillColor === state.COLOR_OTHER) matches = true;
+        } else {
+            const prop = layer.feature.properties;
+            const activeRecord = (prop.h || []).find(record => state.currentSelectedYear >= record.s && state.currentSelectedYear <= record.e);
+            
+            if (activeRecord && activeRecord.p) {
+                const ids = Array.isArray(activeRecord.p) ? activeRecord.p : [activeRecord.p];
+                for (let id of ids) {
+                    const actor = state.personsData[id];
+                    if (actor && actor.occ) {
+                        for (let i = 0; i < actor.occ.length; i++) {
+                            const occ = actor.occ[i].toLowerCase();
+                            const mapping = state.occupationLookup[occ];
+                            if (mapping) {
+                                if (state.colorMode === 'group' && mapping.group === categoryKey) matches = true;
+                                else if (state.colorMode === 'concept' && mapping.concept === categoryKey) matches = true;
+                                else if (state.colorMode === 'zunft' && mapping.zunft === categoryKey) matches = true;
+                                else if (state.colorMode === 'gewerbe' && mapping.gewerbe === categoryKey) matches = true;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Apply the visual filter
+        if (matches) {
+            layer.setStyle({ 
+                fillOpacity: layer instanceof L.CircleMarker ? 1 : 0.9, 
+                opacity: 1, 
+                weight: 3 
+            });
+            if (layer.bringToFront) layer.bringToFront();
+        } else {
+            layer.setStyle({ 
+                fillOpacity: 0.05,  // Dim out non-matching properties
+                opacity: 0.1, 
+                weight: 1 
+            });
+        }
+    });
+}
+
+export function resetLegendHighlight() {
+    updateMap(false); // Restores all default styling without completely restacking
+}
+
+export function toggleLegendFilter(categoryKey) {
+    if (state.activeFilter === categoryKey) {
+        // If clicking the already-active filter, turn it off
+        state.activeFilter = null;
+        resetLegendHighlight();
+    } else {
+        // Otherwise, lock the new filter
+        state.activeFilter = categoryKey;
+        highlightLegendCategory(categoryKey);
+    }
+    updateLegend(); // Refresh the legend to show the selected state
 }
