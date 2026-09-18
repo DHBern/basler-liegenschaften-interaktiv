@@ -7,11 +7,14 @@
 !/institutions_data.json
 !/Stadtmauern_web.geojson
 
+!/datasets/
+
 !/css/
 !/js/
 !/images/
 
 !/prepare_data/
+
 
 /prepare_data/*
 
