@@ -1,7 +1,7 @@
 // js/app.js
 import { state } from './state.js';
 import { map, propertyLayer, institutionLayer, cityWallLayer, updateMap, drawInstitutions, updateLegend, focusProperty } from './map.js';
-import { renderSidebar, closeBottomPanel, selectOwnerInSidebar } from './sidebar.js';
+import { renderSidebar, closeBottomPanel, selectOwnerInSidebar, renderBottomTimeline } from './sidebar.js';
 import { showPersonProfile, closeProfile } from './profile.js';
 import { openModal, closeModal, changeImage, setupModalInteractions } from './modal.js';
 
@@ -15,6 +15,21 @@ window.changeImage = changeImage;
 window.closeBottomPanel = closeBottomPanel;
 window.selectOwnerInSidebar = selectOwnerInSidebar;
 window.focusProperty = focusProperty;
+window.toggleTimelineSection = function(contentId, iconId) {
+    const content = document.getElementById(contentId);
+    const icon = document.getElementById(iconId);
+    if (content.style.display === 'none') {
+        content.style.display = 'block';
+        icon.innerHTML = '&#9660;'; // Down arrow
+    } else {
+        content.style.display = 'none';
+        icon.innerHTML = '&#9654;'; // Right arrow
+    }
+};
+window.togglePriceGraphMode = function() {
+    state.priceGraphMode = state.priceGraphMode === 'absolute' ? 'relative' : 'absolute';
+    renderBottomTimeline(true); // Re-renders the timeline keeping the current scroll position!
+};
 
 const SHOW_WELCOME_PROMPT = true;
 
@@ -30,8 +45,11 @@ document.addEventListener('DOMContentLoaded', () => {
     slider.addEventListener('change', (e) => {
         state.currentSelectedYear = parseInt(e.target.value);
         updateMap();
+        if (state.colorMode === 'price') {
+            updateLegend();
+        }
         if (state.currentProperty && state.currentView === 'owners') {
-            renderSidebar();
+            renderSidebar(false);
         }
     });
 
@@ -87,20 +105,44 @@ Promise.all([
     fetch('prepare_data/geometries.geojson').then(res => res.json()), 
     fetch('prepare_data/actors.json').then(res => res.json()),
     fetch('prepare_data/documents.json').then(res => res.json()),
-    fetch('prepare_data/zuenfte.tsv').then(res => res.text()) // <-- NEW
-]).then(([geoJsonData, fetchedPersons, fetchedDocs, tsvData]) => {
+    fetch('prepare_data/zuenfte.tsv').then(res => res.text()),
+    fetch('datasets/price_history.json').then(res => res.json()),
+    fetch('datasets/price_colorscale_stats.json').then(res => res.json())
+]).then(([geoJsonData, fetchedPersons, fetchedDocs, tsvData, fetchedPrices, fetchedPriceScales]) => {
 
+    // Sort geometries by area
     geoJsonData.features.sort((a, b) => (b.properties.area || 0) - (a.properties.area || 0));
     
-    // Hydrate standard state
+    // Create a temporary lookup dictionary for fast O(1) matching
+    const propertyLookup = {};
+
+    // Hydrate standard state & initialize lookup
     geoJsonData.features.forEach(f => {
         if (typeof f.properties.h === 'string') f.properties.h = JSON.parse(f.properties.h);
         if (typeof f.properties.dhs === 'string') f.properties.dhs = JSON.parse(f.properties.dhs);
+        
+        // Initialize an empty array for every property
+        f.properties.price_history = []; 
+        
+        // Add to our lookup dictionary using the property ID
+        propertyLookup[f.properties.id] = f.properties; 
     });
+
+    // Map the fetched prices to their specific properties
+    if (fetchedPrices) {
+        fetchedPrices.forEach(priceRecord => {
+            const targetProperty = propertyLookup[priceRecord.collection_id];
+            if (targetProperty) {
+                targetProperty.price_history.push(priceRecord);
+            }
+        });
+    }
     
+    // Set global state
     state.propertyData = geoJsonData.features.map(f => f.properties);
     state.personsData = fetchedPersons;
     state.documentsData = fetchedDocs;
+    state.priceScales = fetchedPriceScales || {};
 
     const lines = tsvData.trim().split('\n');
     const headers = lines[0].split('\t').map(h => h.trim());

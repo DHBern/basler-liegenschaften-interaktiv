@@ -17,5 +17,7 @@ export const state = {
         zunft: {},
         gewerbe: {}
     },
-    COLOR_OTHER: '#808080'
+    COLOR_OTHER: '#808080',
+    priceScales: {},
+    priceGraphMode: 'absolute', // 'absolute' or 'relative'
 };

@@ -8,14 +8,38 @@ L.control.attribution({ position: 'bottomleft' }).addTo(map);
 // 1. Define the 1862 layer
 const map1862 = L.tileLayer.wms('https://wms.geo.bs.ch/', {
     layers: 'HP_Situationsplan_Basel_1862', format: 'image/png', transparent: true,
-    attribution: 'Geodaten Kanton Basel-Stadt', updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 8 
+    attribution: 'Geodaten Kanton Basel-Stadt', updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 4 
 });
 
 // 2. Define the 1615 layer
 const map1615 = L.tileLayer.wms('https://wms.geo.bs.ch/', {
     layers: 'HP_Uebersichtsplan_Basel_1615', format: 'image/png', transparent: true,
-    attribution: 'Geodaten Kanton Basel-Stadt', updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 8 
+    attribution: 'Geodaten Kanton Basel-Stadt', updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 4 
 });
+
+// 3. Automatic Retry Logic for Failed Tiles
+function handleTileError(error) {
+    const tile = error.tile;
+    
+    // Attach a retry counter directly to the image element
+    tile.retryCount = tile.retryCount || 0;
+    
+    // Attempt to reload up to 3 times
+    if (tile.retryCount < 3) {
+        tile.retryCount++;
+        
+        // Stagger the retries exponentially (1s, 2s, 3s) so we don't hammer the server again
+        setTimeout(() => {
+            // Append a dummy timestamp parameter to force the browser to bypass its cache
+            const originalSrc = tile.src.split('&_retry')[0]; 
+            tile.src = `${originalSrc}&_retry=${Date.now()}`;
+        }, tile.retryCount * 1000); 
+    }
+}
+
+// Bind the error listener to both WMS layers
+map1862.on('tileerror', handleTileError);
+map1615.on('tileerror', handleTileError);
 
 map1862.addTo(map);
 
@@ -76,6 +100,68 @@ export const propertyLayer = L.geoJSON(null, {
     }
 }).addTo(map);
 
+function getPriceScale(year) {
+    if (state.priceScales[year] && state.priceScales[year].mid !== null) {
+        return state.priceScales[year];
+    }
+    
+    // Fallback: If the exact year is missing or null, expand outwards to find the closest valid year
+    let searchRadius = 1;
+    while (searchRadius <= 50) {
+        if (state.priceScales[year - searchRadius] && state.priceScales[year - searchRadius].mid !== null) {
+            return state.priceScales[year - searchRadius];
+        }
+        if (state.priceScales[year + searchRadius] && state.priceScales[year + searchRadius].mid !== null) {
+            return state.priceScales[year + searchRadius];
+        }
+        searchRadius++;
+    }
+    
+    // Extreme fallback if dataset is completely empty
+    return { min: 10, mid: 100, max: 200 }; 
+}
+
+function getPriceColor(price, year) {
+    const scale = getPriceScale(year);
+    
+    // Clamp the price to the dynamic min/max
+    const val = Math.max(scale.min, Math.min(scale.max, price));
+    
+    let pct, c1, c2;
+    if (val <= scale.mid) {
+        pct = (val - scale.min) / (scale.mid - scale.min);
+        c1 = [69, 117, 180];  // Blue
+        c2 = [255, 255, 191]; // Yellow
+    } else {
+        pct = (val - scale.mid) / (scale.max - scale.mid);
+        c1 = [255, 255, 191]; // Yellow
+        c2 = [215, 48, 39];   // Red
+    }
+    
+    const r = Math.round(c1[0] + (c2[0] - c1[0]) * pct);
+    const g = Math.round(c1[1] + (c2[1] - c1[1]) * pct);
+    const b = Math.round(c1[2] + (c2[2] - c1[2]) * pct);
+    
+    return `rgb(${r}, ${g}, ${b})`;
+}
+
+function getClosestPriceRecord(property, targetYear, window = 12) {
+    if (!property.price_history || property.price_history.length === 0) return null;
+    
+    let bestRecord = null;
+    let smallestDiff = Infinity;
+
+    property.price_history.forEach(record => {
+        const diff = Math.abs(record.year - targetYear);
+        if (diff <= window && diff < smallestDiff) {
+            smallestDiff = diff;
+            bestRecord = record;
+        }
+    });
+    
+    return bestRecord;
+}
+
 function getMarkerColor(ownerIds) {
     if (!ownerIds) return state.COLOR_OTHER;
     const ids = Array.isArray(ownerIds) ? ownerIds : [ownerIds];
@@ -132,8 +218,17 @@ export function updateMap(restack = true) {
         const isSelected = state.currentProperty && prop.id === state.currentProperty.id;
 
         if (isPropertyActive || isSelected) {
-            const activeRecord = (prop.h || []).find(record => state.currentSelectedYear >= record.s && state.currentSelectedYear <= record.e);
-            const markerColor = activeRecord ? getMarkerColor(activeRecord.p) : "#808080"; 
+            let markerColor = "#808080";
+            
+            if (state.colorMode === 'price') {
+                const priceRecord = getClosestPriceRecord(prop, state.currentSelectedYear, 12);
+                if (priceRecord && priceRecord.price_including_dues !== null) {
+                    markerColor = getPriceColor(priceRecord.price_including_dues, state.currentSelectedYear);
+                }
+            } else {
+                const activeRecord = (prop.h || []).find(record => state.currentSelectedYear >= record.s && state.currentSelectedYear <= record.e);
+                markerColor = activeRecord ? getMarkerColor(activeRecord.p) : "#808080"; 
+            }
             
             const weight = isSelected ? 4 : 1;
             const strokeColor = isSelected ? '#ffcc00' : (layer instanceof L.CircleMarker ? '#ffffff' : '#222222');
@@ -233,7 +328,7 @@ export function drawInstitutions() {
     });
 }
 
-export const legendControl = L.control({ position: 'bottomleft' });
+export const legendControl = L.control({ position: 'topleft' });
 
 legendControl.onAdd = function() {
     const div = L.DomUtil.create('div', 'info legend');
@@ -252,6 +347,7 @@ legendControl.onAdd = function() {
             <option value="concept">Occupation Concept (Top 20)</option>
             <option value="zunft">Zunft (Guild)</option>
             <option value="gewerbe">Gewerbe (Trade)</option>
+            <option value="price">Property Value</option>
         </select>
         <div id="legend-items" style="max-height: 250px; overflow-y: auto;"></div>
     `;
@@ -262,6 +358,27 @@ legendControl.addTo(map);
 export function updateLegend() {
     const legendItems = document.getElementById('legend-items');
     if (!legendItems) return;
+
+    if (state.colorMode === 'price') {
+        const scale = getPriceScale(state.currentSelectedYear);
+        
+        legendItems.innerHTML = `
+            <div style="margin-bottom: 5px; font-weight: bold; font-size: 12px; color: #444;">
+                Relative Values in ${state.currentSelectedYear}
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 10px; color: #666; margin-bottom: 2px;">
+                <span>${Math.round(scale.min)} lb.</span>
+                <span>${Math.round(scale.mid)}</span>
+                <span>${Math.round(scale.max)}+ lb.</span>
+            </div>
+            <div style="height: 12px; width: 100%; background: linear-gradient(to right, rgb(69, 117, 180), rgb(255, 255, 191), rgb(215, 48, 39)); border: 1px solid #999; border-radius: 3px; margin-bottom: 8px;"></div>
+            <div style="display: flex; align-items: center; margin-top: 8px;">
+                <span style="background-color: ${state.COLOR_OTHER}; width: 14px; height: 14px; display: inline-block; margin-right: 8px; border: 1px solid #777;"></span>
+                <span style="font-size: 12px; font-family: sans-serif; color: #666; font-style: italic;">No sale in time window</span>
+            </div>
+        `;
+        return; 
+    }
 
     let html = '';
     const activePalette = state.palettes[state.colorMode];

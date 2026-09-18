@@ -3,7 +3,7 @@ import { state } from './state.js';
 
 let lastPropertyId = null;
 
-export function renderSidebar() {
+export function renderSidebar(forceOpen = true) {
     if (!state.currentProperty) return;
     
     // Reset selected person when switching to a completely new property
@@ -28,7 +28,9 @@ export function renderSidebar() {
     renderBottomTimeline();
     
     // Slide panel up!
-    document.getElementById('bottom-panel').classList.add('open');
+    if (forceOpen) {
+        document.getElementById('bottom-panel').classList.add('open');
+    }
 }
 
 export function closeBottomPanel() {
@@ -46,10 +48,47 @@ function renderSidebarContent() {
     const contentDiv = document.getElementById('sidebar-content');
     
     if (!state.selectedPerson) {
-        contentDiv.innerHTML = `
-            <div style="padding: 20px 0; text-align: center; color: #666; font-style: italic;">
-                <p>Select an owner on the timeline below to view their details and associated documents.</p>
-            </div>`;
+        let ecoHtml = `<div style="padding: 15px 0; text-align: center; color: #666; font-style: italic; margin-bottom: 15px;">
+            <p>Select an owner on the timeline below to view their details and associated documents.</p>
+        </div>`;
+
+        // Check if there is price history, and sort it chronologically
+        if (state.currentProperty.price_history && state.currentProperty.price_history.length > 0) {
+            const prices = [...state.currentProperty.price_history].sort((a, b) => a.year - b.year);
+            
+            ecoHtml += `<h4 style="margin-bottom: 10px; color: #444; border-bottom: 2px solid #eee; padding-bottom: 5px;">Economic History</h4>`;
+            ecoHtml += `<table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+                <thead>
+                    <tr style="border-bottom: 1px solid #ddd; color: #666;">
+                        <th style="padding: 6px 2px;">Year</th>
+                        <th style="padding: 6px 2px;">Price (Pfund)</th>
+                        <th style="padding: 6px 2px;">Properties Traded</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+            
+            prices.forEach(p => {
+                const price = p.price_including_dues !== null ? p.price_including_dues.toFixed(2) : 'Unknown';
+                const traded = p.properties_traded ? p.properties_traded.replace(/\|/g, ', ') : '-';
+                
+                // USE THE NEW IDENTIFIER HERE:
+                const docId = p.doc_id;
+
+                ecoHtml += `
+                    <tr style="border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s;" 
+                        onmouseover="this.style.background='#f0f8ff'" 
+                        onmouseout="this.style.background='transparent'"
+                        onclick="window.openModal('${docId}')"
+                        title="Click to view document">
+                        <td style="padding: 8px 2px; color: #0076ff;">${p.year}</td>
+                        <td style="padding: 8px 2px; font-weight: bold;">${price}</td>
+                        <td style="padding: 8px 2px; color: #555;">${traded}</td>
+                    </tr>`;
+            });
+            ecoHtml += `</tbody></table>`;
+        }
+        
+        contentDiv.innerHTML = ecoHtml;
         return;
     }
 
@@ -173,12 +212,20 @@ function renderSidebarContent() {
     contentDiv.innerHTML = html;
 }
 
-function renderBottomTimeline(keepScroll = false) {
+export function renderBottomTimeline(keepScroll = false) {
     const container = document.getElementById('timeline-container');
     const property = state.currentProperty;
 
     // Memorize the current scroll position before we wipe the HTML
     const previousScroll = keepScroll ? container.scrollLeft : 0;
+
+    // Memorize the current open/closed states of the accordions
+    const existingOwn = document.getElementById('ownership-content');
+    const existingEco = document.getElementById('economics-content');
+    const ownDisplay = existingOwn ? existingOwn.style.display : (state.colorMode === 'price' ? 'none' : 'block');
+    const ecoDisplay = existingEco ? existingEco.style.display : (state.colorMode === 'price' ? 'block' : 'none');
+    const ownIcon = ownDisplay === 'none' ? '&#9654;' : '&#9660;';
+    const ecoIcon = ecoDisplay === 'none' ? '&#9654;' : '&#9660;';
     
     if (!property.owners) {
         container.innerHTML = "<p style='padding:20px; color:#888;'>No ownership timeline data available.</p>";
@@ -292,15 +339,103 @@ function renderBottomTimeline(keepScroll = false) {
 
     // Dynamic Panel Height with reduced padding if relations track is hidden
     const basePadding = hasRelations ? 70 : 60;
-    const requiredHeight = (numLanes * LANE_HEIGHT) + RELATIONS_TRACK_HEIGHT + DOC_TRACK_HEIGHT + basePadding; 
-    document.getElementById('bottom-panel').style.height = `${requiredHeight}px`;
 
-    let html = `<div class="timeline-wrapper" style="width: ${TOTAL_WIDTH}px; height: 100%;">`;
+    let html = `<div class="timeline-wrapper" style="width: ${TOTAL_WIDTH}px; height: 100%; display: flex; flex-direction: column;">`;
 
+    // --- BACKGROUND TICK LINES (Always visible) ---
     for (let y = START_YEAR; y <= END_YEAR; y += 10) {
         const leftPos = (y - START_YEAR) * PIXELS_PER_YEAR;
         html += `<div class="year-tick" style="left: ${leftPos}px; z-index: 1;"></div>`;
     }
+
+    // --- 1. SHARED X-AXIS (Years) ---
+    html += `<div class="shared-year-axis" style="position: relative; height: 25px; background: rgba(255,255,255,0.9); z-index: 100; border-bottom: 1px solid #ccc;">`;
+    for (let y = START_YEAR; y <= END_YEAR; y += 10) {
+        const leftPos = (y - START_YEAR) * PIXELS_PER_YEAR;
+        html += `<div style="position: absolute; left: ${leftPos}px; top: 5px; font-size: 11px; color: #555; transform: translateX(-50%); font-weight: bold;">${y}</div>`;
+    }
+    html += `</div>`;
+
+    // --- 2. SHARED RELATIONS TRACK ---
+    if (hasRelations) {
+        html += `<div class="relations-track" style="height: ${RELATIONS_TRACK_HEIGHT}px; position: relative; background: rgba(245, 247, 250, 0.8); z-index: 5;">`;
+
+        if (spatialStack > 0) {
+            html += `<div style="position: sticky; left: 10px; top: 8px; display: inline-flex; flex-direction: column; gap: 4px; z-index: 50; width: max-content;">`;
+            isPartOf.forEach(targetId => {
+                const targetProp = state.propertyData.find(p => p.id === targetId);
+                const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
+                html += `<div onclick="window.focusProperty('${targetId}')" class="related-tag part-of-tag timeline-rel-tag" style="margin:0;">⬆️ Part of: ${targetName}</div>`;
+            });
+            contains.forEach(targetId => {
+                const targetProp = state.propertyData.find(p => p.id === targetId);
+                const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
+                html += `<div onclick="window.focusProperty('${targetId}')" class="related-tag contains-tag timeline-rel-tag" style="margin:0;">⬇️ Contains: ${targetName}</div>`;
+            });
+            html += `</div>`;
+        }
+
+        (property.dhs || []).forEach(phase => {
+            if (phase.relationships && phase.relationships.length > 0) {
+                const startYr = parseInt(phase.start || phase.from || 1400);
+                const endYr = parseInt(phase.end || phase.to || 1700);
+                const startX = Math.max(0, (startYr - START_YEAR) * PIXELS_PER_YEAR);
+                const endX = Math.max(0, (endYr - START_YEAR) * PIXELS_PER_YEAR);
+                
+                const lineTop = RELATIONS_TRACK_HEIGHT / 2;
+                html += `<div style="position: absolute; left: ${startX}px; width: ${endX - startX}px; top: ${lineTop}px; height: 2px; background: rgba(0, 118, 255, 0.2);"></div>`;
+            }
+        });
+
+        for (const [year, data] of Object.entries(relGroups)) {
+            const x = (year - START_YEAR) * PIXELS_PER_YEAR;
+            
+            if (data.preds.length > 0) {
+                html += `<div style="position: absolute; left: ${x}px; top: 8px; transform: translateX(-100%); margin-left: -5px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; z-index: 60;">`;
+                data.preds.forEach(targetId => {
+                    const targetProp = state.propertyData.find(p => p.id === targetId);
+                    const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
+                    
+                    // FIX 1: Jump to 1 year BEFORE the merge so the predecessor is actively visible!
+                    const jumpYr = Math.max(1400, parseInt(year) - 1); 
+                    
+                    html += `<div onclick="window.focusProperty('${targetId}', ${jumpYr})" class="related-tag pred-tag timeline-rel-tag" style="margin:0;" title="Predecessor: ${targetId}">⬅️ ${targetName}</div>`;
+                });
+                html += `</div>`;
+            }
+            
+            if (data.succs.length > 0) {
+                html += `<div style="position: absolute; left: ${x}px; top: 8px; margin-left: 5px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; z-index: 60;">`;
+                data.succs.forEach(targetId => {
+                    const targetProp = state.propertyData.find(p => p.id === targetId);
+                    const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
+                    
+                    // FIX 2: Jump to 1 year AFTER the split so the successor is actively visible!
+                    const jumpYr = Math.min(1700, parseInt(year) + 1); 
+                    
+                    html += `<div onclick="window.focusProperty('${targetId}', ${jumpYr})" class="related-tag succ-tag timeline-rel-tag" style="margin:0;" title="Successor: ${targetId}">➡️ ${targetName}</div>`;
+                });
+                html += `</div>`;
+            }
+        }
+        html += `</div>`;
+    }
+
+    // --- 3. OWNERSHIP ACCORDION ---
+    // Add 25px to the track height to accommodate the document dots right inside the track
+    const OWNERS_TRACK_HEIGHT = (numLanes * LANE_HEIGHT) + 25;
+
+    html += `
+        <div class="timeline-section" style="position: relative; z-index: 10;">
+            <div class="timeline-section-header" style="width: ${TOTAL_WIDTH}px;" onclick="window.toggleTimelineSection('ownership-content', 'ownership-icon')">
+                <div style="position: sticky; left: 15px; display: flex; align-items: center; gap: 8px;">
+                    <span id="ownership-icon" class="accordion-icon">${ownIcon}</span>
+                    <span>Ownership History</span>
+                </div>
+            </div>
+            <div id="ownership-content" style="display: ${ownDisplay}; position: relative;">
+                <div class="owners-track" style="position: relative; height: ${OWNERS_TRACK_HEIGHT}px;">
+    `;
 
     // --- TRACK 1: OWNERSHIP LANES (TOP) ---
     html += `<div class="owners-track" style="position: relative; z-index: 5;">`;
@@ -375,110 +510,203 @@ function renderBottomTimeline(keepScroll = false) {
     }
     html += `</div>`;
 
-
-    // --- TRACK 2: RELATIONS TRACK (MIDDLE) (Conditionally Rendered) ---
-    if (hasRelations) {
-        html += `<div class="relations-track" style="height: ${RELATIONS_TRACK_HEIGHT}px; position: relative; border-top: 2px solid #ccc; background: rgba(245, 247, 250, 0.8); z-index: 5;">`;
-
-        if (spatialStack > 0) {
-            html += `<div style="position: sticky; left: 10px; top: 8px; display: inline-flex; flex-direction: column; gap: 4px; z-index: 50; width: max-content;">`;
-            isPartOf.forEach(targetId => {
-                const targetProp = state.propertyData.find(p => p.id === targetId);
-                const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
-                html += `<div onclick="window.focusProperty('${targetId}')" class="related-tag part-of-tag timeline-rel-tag" style="margin:0;">⬆️ Part of: ${targetName}</div>`;
-            });
-            contains.forEach(targetId => {
-                const targetProp = state.propertyData.find(p => p.id === targetId);
-                const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
-                html += `<div onclick="window.focusProperty('${targetId}')" class="related-tag contains-tag timeline-rel-tag" style="margin:0;">⬇️ Contains: ${targetName}</div>`;
-            });
-            html += `</div>`;
-        }
-
-        (property.dhs || []).forEach(phase => {
-            if (phase.relationships && phase.relationships.length > 0) {
-                const startYr = parseInt(phase.start || phase.from || 1400);
-                const endYr = parseInt(phase.end || phase.to || 1700);
-                const startX = Math.max(0, (startYr - START_YEAR) * PIXELS_PER_YEAR);
-                const endX = Math.max(0, (endYr - START_YEAR) * PIXELS_PER_YEAR);
-                
-                const lineTop = RELATIONS_TRACK_HEIGHT / 2;
-                html += `<div style="position: absolute; left: ${startX}px; width: ${endX - startX}px; top: ${lineTop}px; height: 2px; background: rgba(0, 118, 255, 0.2);"></div>`;
-            }
-        });
-
-        for (const [year, data] of Object.entries(relGroups)) {
-            const x = (year - START_YEAR) * PIXELS_PER_YEAR;
-            
-            if (data.preds.length > 0) {
-                html += `<div style="position: absolute; left: ${x}px; top: 8px; transform: translateX(-100%); margin-left: -5px; display: flex; flex-direction: column; gap: 4px; align-items: flex-end; z-index: 60;">`;
-                data.preds.forEach(targetId => {
-                    const targetProp = state.propertyData.find(p => p.id === targetId);
-                    const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
-                    
-                    // FIX 1: Jump to 1 year BEFORE the merge so the predecessor is actively visible!
-                    const jumpYr = Math.max(1400, parseInt(year) - 1); 
-                    
-                    html += `<div onclick="window.focusProperty('${targetId}', ${jumpYr})" class="related-tag pred-tag timeline-rel-tag" style="margin:0;" title="Predecessor: ${targetId}">⬅️ ${targetName}</div>`;
-                });
-                html += `</div>`;
-            }
-            
-            if (data.succs.length > 0) {
-                html += `<div style="position: absolute; left: ${x}px; top: 8px; margin-left: 5px; display: flex; flex-direction: column; gap: 4px; align-items: flex-start; z-index: 60;">`;
-                data.succs.forEach(targetId => {
-                    const targetProp = state.propertyData.find(p => p.id === targetId);
-                    const targetName = targetProp && targetProp.adrs ? targetProp.adrs : targetId;
-                    
-                    // FIX 2: Jump to 1 year AFTER the split so the successor is actively visible!
-                    const jumpYr = Math.min(1700, parseInt(year) + 1); 
-                    
-                    html += `<div onclick="window.focusProperty('${targetId}', ${jumpYr})" class="related-tag succ-tag timeline-rel-tag" style="margin:0;" title="Successor: ${targetId}">➡️ ${targetName}</div>`;
-                });
-                html += `</div>`;
-            }
-        }
-        html += `</div>`;
-    }
-
-    html += `<div class="doc-track" style="height: ${DOC_TRACK_HEIGHT}px; margin-top: 0; border-top: 1px solid #ccc; z-index: 5;">`;
-    for (let y = START_YEAR; y <= END_YEAR; y += 10) {
-        const leftPos = (y - START_YEAR) * PIXELS_PER_YEAR;
-        html += `<div style="position: absolute; left: ${leftPos}px; top: 2px; font-size: 10px; color: #666; transform: translateX(-50%); font-weight: bold; z-index: 5;">${y}</div>`;
-    }
-    
     for (const [year, docSet] of Object.entries(docsByYear)) {
         const left = (year - START_YEAR) * PIXELS_PER_YEAR;
         let stackIndex = 0;
-        
         docSet.forEach(docId => {
             const doc = state.documentsData[docId];
             const isNeighbor = doc && doc.dossier !== property.id;
-            const isOwnership = ownershipDocIds.has(docId); // Check if it's an ownership doc
+            const isOwnership = ownershipDocIds.has(docId);
             
-            const bottomOffset = 4 + (stackIndex * 8); 
+            // Starts 2px from the bottom, stacking upwards
+            const bottomOffset = 2 + (stackIndex * 8); 
             
             if (isNeighbor) {
-                html += `<div class="doc-diamond" style="left: ${left}px; bottom: ${bottomOffset}px;" 
-                              title="Neighbor Doc: ${year} (From: ${doc.dossier})" 
-                              onclick="window.openModal('${docId}')"></div>`;
+                html += `<div class="doc-diamond" style="left: ${left}px; bottom: ${bottomOffset}px;" title="Neighbor Doc: ${year}" onclick="window.openModal('${docId}')"></div>`;
             } else if (!isOwnership) {
-                // NEW: Small Grey Dot for General Documents
-                html += `<div class="doc-grey-dot" style="left: ${left}px; bottom: ${bottomOffset}px;" 
-                              title="General Doc: ${year}" 
-                              onclick="window.openModal('${docId}')"></div>`;
+                html += `<div class="doc-grey-dot" style="left: ${left}px; bottom: ${bottomOffset}px;" title="General Doc: ${year}" onclick="window.openModal('${docId}')"></div>`;
             } else {
-                // EXISTING: Red Dot for Ownership Documents
-                html += `<div class="doc-dot" style="left: ${left}px; bottom: ${bottomOffset}px;" 
-                              title="Ownership Doc: ${year}" 
-                              onclick="window.openModal('${docId}')"></div>`;
+                html += `<div class="doc-dot" style="left: ${left}px; bottom: ${bottomOffset}px;" title="Ownership Doc: ${year}" onclick="window.openModal('${docId}')"></div>`;
             }
             stackIndex++;
         });
     }
-    html += `</div>`; 
+    
+    html += `</div></div></div>`;
+
+    // --- 4. ECONOMICS ACCORDION ---
+    const prices = property.price_history || []; 
+    let ecoHtml = '';
+    
+    const isRelative = state.priceGraphMode === 'relative';
+
+    if (prices.length === 0) {
+        ecoHtml = `<div style="position: sticky; left: 15px; top: 15px; color: #888; font-style: italic;">No price history available for this property.</div>`;
+    } else {
+        prices.sort((a, b) => a.year - b.year);
+        
+        // 1. MAXIMIZED VERTICAL SPACE
+        const GRAPH_HEIGHT = 100; // Expanded from 80
+        const GRAPH_TOP_MARGIN = 10; // Tightened from 20
+
+        // 2. NEW: VERTICAL GRIDLINES (Every 10 years)
+        let verticalGridSvg = '';
+        for (let y = START_YEAR; y <= END_YEAR; y += 10) {
+            const lineX = (y - START_YEAR) * PIXELS_PER_YEAR;
+            verticalGridSvg += `<line x1="${lineX}" y1="${GRAPH_TOP_MARGIN}" x2="${lineX}" y2="${GRAPH_TOP_MARGIN + GRAPH_HEIGHT}" stroke="#eaeaea" stroke-width="1" />`;
+        }
+
+        let yAxisHtml = '';
+        let gridLinesSvg = `
+            ${verticalGridSvg}
+            <line x1="0" y1="${GRAPH_TOP_MARGIN}" x2="${TOTAL_WIDTH}" y2="${GRAPH_TOP_MARGIN}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4" />
+            <line x1="0" y1="${GRAPH_TOP_MARGIN + GRAPH_HEIGHT/2}" x2="${TOTAL_WIDTH}" y2="${GRAPH_TOP_MARGIN + GRAPH_HEIGHT/2}" stroke="#e2e8f0" stroke-width="1" stroke-dasharray="4" />
+            <line x1="0" y1="${GRAPH_TOP_MARGIN + GRAPH_HEIGHT}" x2="${TOTAL_WIDTH}" y2="${GRAPH_TOP_MARGIN + GRAPH_HEIGHT}" stroke="#cbd5e1" stroke-width="1" />
+        `;
+        let svgPolylinePoints = [];
+        let medianSvgPoints = [];
+        let dataPointsHtml = '';
+
+        if (isRelative) {
+            // RELATIVE MODE: Y-Axis is locked 0 to 100
+            const maxPrice = 100;
+            
+            prices.forEach(record => {
+                if (record.relative_percentile === null || record.relative_percentile === undefined) return;
+                
+                const x = (record.year - START_YEAR) * PIXELS_PER_YEAR;
+                const y = GRAPH_TOP_MARGIN + GRAPH_HEIGHT - ((record.relative_percentile / maxPrice) * GRAPH_HEIGHT);
+                
+                svgPolylinePoints.push(`${x},${y}`);
+                
+                const tradedClean = record.properties_traded ? record.properties_traded.replace(/\|/g, ', ') : 'Unknown';
+                let docId = record.doc_id;
+                
+                dataPointsHtml += `
+                    <div class="price-node" 
+                         style="left: ${x}px; top: ${y}px;"
+                         title="Year: ${record.year}&#10;This property was more expensive than ${record.relative_percentile}% of properties sold between ${record.window_start} and ${record.window_end}.&#10;Included: ${tradedClean}&#10;(Click to open document)"
+                         onclick="window.openModal('${docId}')">
+                    </div>
+                `;
+            });
+
+            // Draw a flat 50% benchmark line
+            const y50 = GRAPH_TOP_MARGIN + (GRAPH_HEIGHT / 2);
+            medianSvgPoints.push(`0,${y50} ${TOTAL_WIDTH},${y50}`);
+
+            yAxisHtml = `
+                <div style="position: sticky; left: 0; width: 45px; height: 100%; z-index: 50; background: rgba(255,255,255,0.7); backdrop-filter: blur(2px); border-right: 1px solid #e2e8f0; pointer-events: none;">
+                    <div style="position: absolute; top: ${GRAPH_TOP_MARGIN - 6}px; right: 6px; font-size: 10px; color: #64748b;">100%</div>
+                    <div style="position: absolute; top: ${GRAPH_TOP_MARGIN + GRAPH_HEIGHT/2 - 6}px; right: 6px; font-size: 10px; color: #64748b;">50%</div>
+                    <div style="position: absolute; top: ${GRAPH_TOP_MARGIN + GRAPH_HEIGHT - 6}px; right: 6px; font-size: 10px; color: #64748b;">0%</div>
+                </div>
+            `;
+            
+        } else {
+            // ABSOLUTE MODE: Y-Axis scales to maximum values + 5% headroom
+            function getSafeMedian(targetYear) {
+                if (state.priceScales[targetYear] && state.priceScales[targetYear].mid !== null) return state.priceScales[targetYear].mid;
+                let radius = 1;
+                while(radius <= 50) {
+                    if (state.priceScales[targetYear - radius] && state.priceScales[targetYear - radius].mid !== null) return state.priceScales[targetYear - radius].mid;
+                    if (state.priceScales[targetYear + radius] && state.priceScales[targetYear + radius].mid !== null) return state.priceScales[targetYear + radius].mid;
+                    radius++;
+                }
+                return 0; 
+            }
+
+            let medianPointsData = [];
+            let rawMedianMax = 0;
+            for (let y = START_YEAR; y <= END_YEAR; y += 5) {
+                const midVal = getSafeMedian(y);
+                if (midVal > 0) {
+                    medianPointsData.push({ year: y, val: midVal });
+                    if (midVal > rawMedianMax) rawMedianMax = midVal;
+                }
+            }
+
+            const rawPropMax = Math.max(...prices.map(p => p.price_including_dues || 0));
+            const rawMax = Math.max(rawPropMax, rawMedianMax);
+            
+            // Reduced headroom to 5% so the absolute graph also utilizes more vertical space
+            const maxPrice = rawMax > 0 ? rawMax * 1.05 : 100; 
+            
+            prices.forEach(record => {
+                if (record.price_including_dues === null) return; 
+                const x = (record.year - START_YEAR) * PIXELS_PER_YEAR;
+                const y = GRAPH_TOP_MARGIN + GRAPH_HEIGHT - ((record.price_including_dues / maxPrice) * GRAPH_HEIGHT);
+                
+                svgPolylinePoints.push(`${x},${y}`);
+                
+                const tradedClean = record.properties_traded ? record.properties_traded.replace(/\|/g, ', ') : 'Unknown';
+                let docId = record.doc_id;
+                
+                dataPointsHtml += `
+                    <div class="price-node" 
+                         style="left: ${x}px; top: ${y}px;"
+                         title="Year: ${record.year}&#10;Price: ${record.price_including_dues.toFixed(2)} Pfund&#10;Included: ${tradedClean}&#10;(Click to open document)"
+                         onclick="window.openModal('${docId}')">
+                    </div>
+                `;
+            });
+
+            medianPointsData.forEach(m => {
+                const x = (m.year - START_YEAR) * PIXELS_PER_YEAR;
+                const y = GRAPH_TOP_MARGIN + GRAPH_HEIGHT - ((m.val / maxPrice) * GRAPH_HEIGHT);
+                medianSvgPoints.push(`${x},${y}`);
+            });
+
+            yAxisHtml = `
+                <div style="position: sticky; left: 0; width: 45px; height: 100%; z-index: 50; background: rgba(255,255,255,0.7); backdrop-filter: blur(2px); border-right: 1px solid #e2e8f0; pointer-events: none;">
+                    <div style="position: absolute; top: ${GRAPH_TOP_MARGIN - 6}px; right: 6px; font-size: 10px; color: #64748b;">${Math.round(maxPrice)}</div>
+                    <div style="position: absolute; top: ${GRAPH_TOP_MARGIN + GRAPH_HEIGHT/2 - 6}px; right: 6px; font-size: 10px; color: #64748b;">${Math.round(maxPrice/2)}</div>
+                    <div style="position: absolute; top: ${GRAPH_TOP_MARGIN + GRAPH_HEIGHT - 6}px; right: 6px; font-size: 10px; color: #64748b;">0</div>
+                </div>
+            `;
+        }
+
+        ecoHtml = `
+            ${yAxisHtml}
+            <svg style="position: absolute; left: 0; top: 0; width: ${TOTAL_WIDTH}px; height: 100%; pointer-events: none;">
+                ${gridLinesSvg}
+                <polyline points="${medianSvgPoints.join(' ')}" fill="none" stroke="#94a3b8" stroke-width="2" stroke-dasharray="6,4" opacity="0.8" />
+                <polyline points="${svgPolylinePoints.join(' ')}" fill="none" stroke="#28a745" stroke-width="2" opacity="0.6" />
+            </svg>
+            ${dataPointsHtml}
+        `;
+    }
+
+    const toggleBtnText = isRelative ? 'Switch to Absolute Values' : 'Switch to Relative Values';
+    const legendText = isRelative 
+        ? `<span style="display: flex; align-items: center; gap: 4px;"><span style="width: 12px; border-top: 2px dashed #94a3b8; display: inline-block;"></span> 50% Benchmark</span>`
+        : `<span style="display: flex; align-items: center; gap: 4px;"><span style="width: 12px; border-top: 2px dashed #94a3b8; display: inline-block;"></span> City Median</span>`;
+
+    html += `
+        <div class="timeline-section" style="position: relative; z-index: 10;">
+            <div class="timeline-section-header" style="width: ${TOTAL_WIDTH}px;" onclick="window.toggleTimelineSection('economics-content', 'economics-icon')">
+                <div style="position: sticky; left: 15px; display: flex; align-items: center; gap: 8px;">
+                    <span id="economics-icon" class="accordion-icon">${ecoIcon}</span>
+                    <span>Price History</span>
+                    
+                    <!-- The Toggle Button -->
+                    <button onclick="window.togglePriceGraphMode(); event.stopPropagation();" style="margin-left: 10px; padding: 2px 8px; font-size: 10px; cursor: pointer; border-radius: 4px; border: 1px solid #ccc; background: #f8f9fa;">${toggleBtnText}</button>
+                    
+                    <!-- Miniature Legend for the Graph -->
+                    ${prices.length > 0 ? `<div style="margin-left: 15px; font-weight: normal; font-size: 11px; color: #64748b; display: flex; gap: 15px;">
+                        <span style="display: flex; align-items: center; gap: 4px;"><span style="width: 12px; height: 2px; background: #28a745; display: inline-block;"></span> Property</span>
+                        ${legendText}
+                    </div>` : ''}
+                </div>
+            </div>
+            <div id="economics-content" style="display: ${ecoDisplay}; position: relative; height: 120px; background: #fff; border-bottom: 1px solid #ccc;">
+                ${ecoHtml}
+            </div>
+        </div>
+    `;
 
     html += `<svg class="timeline-svg-overlay"></svg></div>`;
+
     container.innerHTML = html;
 
     if (keepScroll) {
