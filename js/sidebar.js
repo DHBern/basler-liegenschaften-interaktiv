@@ -230,7 +230,6 @@ export function renderBottomTimeline(keepScroll = false) {
     
     if (!property.owners) {
         container.innerHTML = "<p style='padding:20px; color:#888;'>No ownership timeline data available.</p>";
-        document.getElementById('bottom-panel').style.height = '150px';
         return;
     }
 

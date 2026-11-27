@@ -5,6 +5,13 @@ import { renderSidebar } from './sidebar.js';
 export const map = L.map('map', { center: [47.5596, 7.5886], zoom: 15, preferCanvas: true, attributionControl: false });
 L.control.attribution({ position: 'bottomleft' }).addTo(map);
 
+const mapEl = document.getElementById('map');
+if (mapEl && typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => {
+        map.invalidateSize({ pan: false, animate: false });
+    }).observe(mapEl);
+}
+
 // 1. Define the 1862 layer
 const map1862 = L.tileLayer.wms('https://wms.geo.bs.ch/', {
     layers: 'HP_Situationsplan_Basel_1862', format: 'image/png', transparent: true,
@@ -444,12 +451,6 @@ export function focusProperty(propertyId, autoYear = null) {
     });
 
     if (targetLayer) {
-        if (targetLayer.getBounds) {
-            map.fitBounds(targetLayer.getBounds(), { padding: [50, 50], maxZoom: 18 });
-        } else if (targetLayer.getLatLng) {
-            map.setView(targetLayer.getLatLng(), 18);
-        }
-        
         state.currentProperty = targetLayer.feature.properties;
         
         let restack = false;
@@ -461,6 +462,14 @@ export function focusProperty(propertyId, autoYear = null) {
         }
         
         renderSidebar();
+        map.invalidateSize({ pan: false, animate: false });
+
+        if (targetLayer.getBounds) {
+            map.fitBounds(targetLayer.getBounds(), { padding: [50, 50], maxZoom: 18 });
+        } else if (targetLayer.getLatLng) {
+            map.setView(targetLayer.getLatLng(), 18);
+        }
+        
         updateMap(restack); 
     }
 }

@@ -29,23 +29,20 @@
     </div>
     
     <div id="map-container">
-        <div id="map"></div>
-        
-        <!-- NEW: The Expandable Bottom Panel for the Gantt Chart -->
-        <div id="bottom-panel">
-            <div id="panel-header">
-            </div>
-            <div id="timeline-container">
-                <!-- Timeline will be injected here by sidebar.js -->
-            </div>
-        </div>
+        <div id="main-stage">
+            <div id="map"></div>
 
-        <div id="person-profile">
-            <div id="profile-header">
-                <span id="profile-name">Actor Name</span>
-                <span id="profile-close" onclick="window.closeProfile()">&times;</span>
+            <div id="person-profile"></div>
+
+            <!-- Expandable Bottom Panel for the Gantt Chart & Price History -->
+            <div id="bottom-panel">
+                <div id="panel-header">
+                    <span id="panel-close" title="Close timeline" onclick="window.closeBottomPanel()">&times;</span>
+                </div>
+                <div id="timeline-container">
+                    <!-- Timeline will be injected here by sidebar.js -->
+                </div>
             </div>
-            <div id="profile-content"></div>
         </div>
 
         <div id="sidebar">

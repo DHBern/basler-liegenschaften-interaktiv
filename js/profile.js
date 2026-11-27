@@ -78,18 +78,6 @@ export function showPersonProfile(personId) {
 
     const profileDiv = document.getElementById('person-profile');
     profileDiv.innerHTML = html;
-    
-    // Grab the main sidebar container (the parent holding the title/content)
-    const sidebarContainer = document.getElementById('sidebar-title').parentElement;
-    
-    if (sidebarContainer) {
-        const rect = sidebarContainer.getBoundingClientRect();
-        // Calculate the exact distance from the right edge of the browser window to the left edge of the sidebar
-        const offsetFromRight = window.innerWidth - rect.left;
-        // Apply that exact offset + a 15px gap so it doesn't rub shoulders!
-        profileDiv.style.right = `${offsetFromRight + 15}px`; 
-    }
-
     profileDiv.style.display = 'block';
 }
 

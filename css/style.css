@@ -8,17 +8,45 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100
 #yearSlider { width: 300px; cursor: pointer; }
 #yearDisplay { font-weight: bold; font-size: 1.2em; min-width: 50px;}
 
-#map-container { position: relative; flex-grow: 1; }
-#map { width: 100%; height: 100%; }
+#map-container {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: row;
+    overflow: hidden;
+}
+#main-stage {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+#map {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+}
 
 /* =========================================
    2. RIGHT SIDEBAR (PROPERTY EXPLORER)
    ========================================= */
 #sidebar {
-    position: absolute; top: 0; right: 0; width: 380px; height: 100%;
-    background: rgba(255, 255, 255, 0.95); z-index: 1000;
-    padding: 20px; box-sizing: border-box; box-shadow: -2px 0 5px rgba(0,0,0,0.3);
-    display: flex; flex-direction: column;
+    width: 380px;
+    flex-shrink: 0;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.95);
+    z-index: 1000;
+    padding: 20px;
+    box-sizing: border-box;
+    box-shadow: -2px 0 5px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
 }
 #sidebar-content { flex-grow: 1; overflow-y: auto; padding-right: 5px; scroll-behavior: smooth; }
 
@@ -52,19 +80,6 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100
 /* =========================================
    3. FLOATING ACTOR PROFILE
    ========================================= */
-#person-profile {
-    display: none; position: absolute; top: 20px; left: 20px; width: 320px;
-    background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px);
-    z-index: 1000; border-radius: 8px; box-shadow: 2px 4px 15px rgba(0,0,0,0.3);
-    border: 1px solid #ddd; overflow: hidden; font-size: 14px;
-}
-#profile-header {
-    background: #2c3e50; color: white; padding: 12px 15px; font-weight: bold;
-    display: flex; justify-content: space-between; align-items: center;
-}
-#profile-close { cursor: pointer; font-size: 18px; color: #bbb; }
-#profile-close:hover { color: white; }
-#profile-content { padding: 15px; max-height: 60vh; overflow-y: auto; }
 .profile-section { margin-bottom: 12px; font-size: 13px;}
 .profile-label { font-size: 11px; color: #777; text-transform: uppercase; font-weight: bold; display: block; margin-bottom: 2px;}
 
@@ -105,34 +120,31 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100
    5. BOTTOM PANEL (GANTT CHART TIMELINE)
    ========================================= */
 #bottom-panel {
-    position: absolute; 
-    bottom: -100%; /* Hidden by default, relies on dynamic height to slide away */
-    left: 0; 
-    width: calc(100% - 380px); /* Leave room for sidebar */
-    background: #fff; 
-    z-index: 1000; 
-    box-shadow: 0 -4px 15px rgba(0,0,0,0.15);
-    transition: bottom 0.3s cubic-bezier(0.25, 0.8, 0.25, 1); 
-    display: flex; 
+    display: none;
     flex-direction: column;
-    height: auto !important; /* Overrides the old strict JS height */
-    max-height: 65vh;
+    flex-shrink: 0;
+    width: 100%;
+    max-height: 60vh;
+    background: #fff;
+    border-top: 1px solid #cbd5e1;
+    z-index: 1000;
+    box-shadow: 0 -4px 15px rgba(0,0,0,0.12);
 }
 
 #bottom-panel.open {
-    bottom: 0; /* Slide up into view */
+    display: flex;
 }
 
 #panel-header {
-    background: #fff; padding: 5px 15px; border-bottom: none;
+    background: #fff; padding: 4px 12px; border-bottom: none;
     display: flex; justify-content: flex-end; align-items: center; font-weight: bold;
 }
 
-#panel-close { cursor: pointer; font-size: 20px; color: #888; }
+#panel-close { cursor: pointer; font-size: 20px; color: #888; line-height: 1; }
 #panel-close:hover { color: #d9534f; }
 
 #timeline-container {
-    flex-grow: 1; overflow-x: auto; overflow-y: auto; 
+    flex-grow: 1; min-height: 0; overflow-x: auto; overflow-y: auto;
     position: relative; background: #fafafa; padding-bottom: 20px;
 }
 
@@ -311,16 +323,17 @@ body { margin: 0; padding: 0; display: flex; flex-direction: column; height: 100
    ========================================= */
 #person-profile {
     position: absolute;
-    top: 20px !important;
-    left: auto !important; 
-    /* The 'right' property is now dynamically handled by JS! */
+    top: 20px;
+    right: 15px;
     width: 280px;
+    max-height: calc(100% - 40px);
+    overflow-y: auto;
     background: #ffffff;
     border-radius: 8px;
     box-shadow: 0 4px 20px rgba(0,0,0,0.15);
     border: 1px solid #ddd;
     padding: 20px;
-    z-index: 1000;
+    z-index: 1100;
     font-family: inherit;
     color: #333;
     display: none;
